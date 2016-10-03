@@ -1,0 +1,526 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# frdepartment : mainfile
+
+#import cli.app # probably not necessary
+import sys
+import itertools
+import os
+import re
+import git
+from git import Repo
+from shutil import copyfile
+#from tabulate import tabulate
+
+
+def camelcasing(normalText):
+    camelcased=''.join(x for x in normalText.title() if not x.isspace())
+    lowerFirst=camelcased[:1].lower() + camelcased[1:]
+    return lowerFirst
+
+
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True, "oui": True, "o": True,
+             "no": False, "n": False, "non": False}
+    if default is None:
+        prompt = " [o/n] "
+    elif default == "yes":
+        prompt = " [O/n] "
+    elif default == "no":
+        prompt = " [o/N] "
+    else:
+        raise ValueError("Réponse invalide: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("S’il vous plait, répondez par « Oui » ou « Non » "
+                             "(ou 'o' ou 'n').\n")
+
+
+def query_x_y(question, x, y):
+    valid = {}
+    i=0
+    while i < len(x):
+        valid[x[i]] = True
+        i += 1
+    i=0
+    while i < len(y):
+        valid[y[i]] = False
+        i += 1
+    prompt = " [" + x[0] + "/" + y[0] + "] "
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("S’il vous plait, répondez par « " + x[0] + " » ou « " + y[0] + " » ")
+
+
+def litteralize(bol):
+    if bol == True:
+        return "Oui"
+    else:
+        return "Non"
+
+# Valeur par défaut
+author="Fauve"
+date="\\today"
+title=""
+
+bibliographie=False
+glossaire=False
+
+while title == "":
+    title = input('Titre : ')
+
+author = input('Auteur [Fauve] : ')
+if author == '':
+    author= "Fauve"
+date   = input('Date [\\today] : ')
+if date == '':
+    date= "\\today"
+
+defautCode=camelcasing(title)
+
+littcode = input('Code [' + defautCode +'] : ')
+if littcode == "":
+    littcode=defautCode
+
+bibliographie=query_yes_no('Utiliser une bibliographie', "no")
+glossaire=query_yes_no('Utiliser un glossaire ', "no")
+editionType=query_x_y("Maintenir une Mono-édition ou une double-édition", ["mono-édition","m","mono","monoédition","monoedition","mono-edition"], ["double-édition","d","double","double-edition"])
+genre=query_x_y("Écrire un article ou un livre", ["article","a"], ["livre","l"])
+litterary=query_yes_no('Est-ce une œuvre littéraire ?', "no")
+
+weHaveAValideDirectory=""
+
+directory=input("Chosissez un repertoire [~/" + littcode + "] : ")
+if directory == "":
+    directory=os.path.expanduser("~/" + littcode)
+while weHaveAValideDirectory in [False, ""]:
+    if os.path.isdir(os.path.expanduser(directory)) == True:
+        weHaveAValideDirectory=False
+        directory=input("Le répertoire « " + directory + " » existes déjà. Veuillez en choisir un autre : ")
+        directory=os.path.isdir(directory)
+    else:
+        weHaveAValideDirectory=True
+
+print("\n====Résumé====\nTitre : " + title + "\nCode : " + littcode + "\nAuteur : " + author + "\nDate : " + date + "\nBibliographie : " + litteralize(bibliographie) + "\nType d’édition : " + litteralize(editionType) + "\nGenre : " + litteralize(genre) + "\nGlossaire : " + litteralize(glossaire) + "\nRépertoir : " + directory)
+
+
+if litterary == True:
+    metaFauveLittCodeFormat="\\fauveLittCode{" + littcode + "}"
+    mainFileLitteraryMention=",littera"
+else:
+    metaFauveLittCodeFormat="%\\fauveLittCode{}"
+    mainFileLitteraryMention=""
+
+# Création des fichiers communs statiques
+os.makedirs(directory)
+copyfile("/home/fauve/.initlatex/fauve.sty", directory + "/fauve.sty")
+copyfile("/home/fauve/.initlatex/biblio.bib", directory + "/biblio.bib")
+copyfile("/home/fauve/.initlatex/platon.bib", directory + "/platon.bib")
+copyfile("/home/fauve/.initlatex/main-glos.tex", directory + "/main-glos.tex")
+copyfile("/home/fauve/.initlatex/macros.tex", directory + "/macros.tex")
+copyfile("/home/fauve/.initlatex/contenu.tex", directory + "/contenu.tex")
+
+# Création des fichiers communs à méta-données
+#copyfile("meta.tex", directory)
+
+metaTex="""% vim: syntax=tex
+%
+% ./meta.tex
+%
+%---------------------------------------------------------------
+%
+% Ce fichier rassemble diverses commandes sur la déffinition de diverses variables générales.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+\\title{""" + title + """}
+\\author{""" + author + """}
+\date{""" + date +"""}
+%\licence{}
+%\genre{Comédie}
+""" + metaFauveLittCodeFormat + """
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                       Spécificité des PDFs                           %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\hypersetup{
+  pdftitle={},  % Titre du document.
+                                                  % Informations apparaissant dans
+  pdfauthor={},                              % dans les informations du document
+  pdfsubject={}                            % sous Acrobat.
+}
+"""
+
+print("Écriture de " + directory + "/meta.tex")
+with open(directory + "/meta.tex",'w') as f:
+    f.write(metaTex)
+
+print("Écriture de " + directory + "/fauve.sty")
+#with open(directory + "/fauve.sty",'w') as f:
+#    f.write(fauveSTY)
+
+if glossaire == True:
+    glossaryComment=""
+    glossaryMakefileComment=""
+if glossaire == False:
+    glossaryComment="%"
+    glossaryMakefileComment="#"
+
+if bibliographie == True:
+    bibliographieComment=""
+    bibliographyMakefileComment=""
+if bibliographie == False:
+    bibliographieComment="%"
+    bibliographyMakefileComment="#"
+
+if genre == True:
+    print("Article")
+    genreToUse="article"
+if genre == False:
+    print("Livre")
+    genreToUse="book"
+
+if editionType == True:
+    print("monoédition")
+    makefileDoubleEditionIndication="no"
+
+    mainTEX="""\\documentclass[a4paper,12pt,oneside,french]{""" + genreToUse + """}
+\\usepackage[culdelampe""" + mainFileLitteraryMention + """]{fauve}
+\\input{meta.tex}            % Déffinition des métadonnées.
+""" + glossaryComment + """\\input{main-glos.tex}
+
+""" + bibliographieComment + """\\bibliography{./biblio.bib}
+
+\\begin{document}
+  \\maketitle
+
+  \\input{contenu.tex}       % L’œuvre proprement dite.
+  %
+  %
+  """ + bibliographieComment + """\\printbibliography
+  %
+  """ + glossaryComment + """\\glsaddall
+  """ + glossaryComment + """\\glossarystyle{tree}
+  """ + glossaryComment + """\\printglossary[title=Glossaire,toctitle=Glossaire]
+  %
+\\end{document}"""
+
+    print("Écriture de " + directory + "/main.tex")
+    with open(directory + "/main.tex",'w') as f:
+        f.write(mainTEX)
+
+elif editionType == False:
+    print("double-édition")
+    makefileDoubleEditionIndication="yes"
+
+    mainScholarlyTEX="""% Ce fichier fait partie des sources LaTeX du projet *""" + title + """* de """ + author + """
+% Licence [CC-by-sa](https://creativecommons.org/licenses/by-sa/3.0/deed.fr)
+%
+% ./main-scholarly.tex
+%
+%---------------------------------------------------------------
+%
+\\documentclass[a4paper,11pt,oneside,french]{""" + genreToUse + """}
+\\usepackage[culdelampe""" + mainFileLitteraryMention + """]{fauve}
+\\usepackage{lettrine}
+
+\\input{macro-scholarly.tex}   % Déffinition de macros prôpres à l’édition savante.
+\\input{meta.tex}        % Metainformation sur l’œuvre (Auteur, nom, date).
+
+""" + glossaryComment + """\\input{main-glos.tex}
+""" + bibliographieComment + """\\bibliography{./biblio.bib}
+
+\\begin{document}
+  \\maketitle            % Impression de la page de garde telle que redéfinie.
+
+  \\frontmatter          % Début du contenu, à proprement parler de l’ouvrage.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Début véritable du corp de l’ouvrage.                                %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \\mainmatter
+
+  \\input{contenu.tex}   % Inclusion de la nouvelle et seulement du texte principal.
+  %
+  """ + bibliographieComment + """\\printbibliography
+  %
+  """ + glossaryComment + """\\glsaddall
+  """ + glossaryComment + """\\glossarystyle{tree}
+  """ + glossaryComment + """\\printglossary[title=Glossaire,toctitle=Glossaire]
+  %
+\\end{document}"""
+
+    mainCommonTEX="""% Ce fichier fait partie des sources LaTeX du projet *""" + title + """* de """ + author + """
+% Licence [CC-by-sa](https://creativecommons.org/licenses/by-sa/3.0/deed.fr)
+%
+% ./main-common.tex
+%
+%---------------------------------------------------------------
+%
+\\documentclass[a4paper,11pt,oneside,french]{""" + genreToUse + """}
+\\usepackage[culdelampe""" + mainFileLitteraryMention + """]{fauve}
+\\usepackage{lettrine}
+
+\\input{macro-scholarly.tex}   % Déffinition de macros prôpres à l’édition savante.
+\\input{meta.tex}        % Metainformation sur l’œuvre (Auteur, nom, date).
+
+""" + glossaryComment + """\\input{main-glos.tex}
+""" + bibliographieComment + """\\bibliography{./biblio.bib}
+
+\\begin{document}
+  \\maketitle            % Impression de la page de garde telle que redéfinie.
+
+  \\frontmatter          % Début du contenu, à proprement parler de l’ouvrage.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Début véritable du corp de l’ouvrage.                                %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \\mainmatter
+
+  \\input{contenu.tex}   % Inclusion de la nouvelle et seulement du texte principal.
+  %
+  %\\printbibliography
+  %
+  \\glsaddall
+  %\\glossarystyle{tree}
+  %\\printglossary[title=Glossaire,toctitle=Glossaire]
+  %
+\\end{document}"""
+
+    print("Écriture de " + directory + "/main-scholarly.tex")
+    with open(directory + "/main-scholarly.tex",'w') as f:
+        f.write(mainScholarlyTEX)
+
+    print("Écriture de " + directory + "/main-common.tex")
+    with open(directory + "/main-common.tex",'w') as f:
+        f.write(mainCommonTEX)
+
+makefileTXT="""# Makefile
+
+########################################################################
+# Variables primordiales                                               #
+########################################################################
+NAME          = """ + littcode + """# # Le nom du projet, cette variable sera       #
+                         # placée à la racine du nom de fichier de     #
+                         # sortie                                      #
+########################################################################
+DOUBLEEDITION = """ + makefileDoubleEditionIndication + """#      # Doit être placé à `true` pour les cas où    #
+                         # l’on désire maintenir deux éditions         #
+                         # concurentes.                                #
+########################################################################
+
+#############################################################################
+
+########################################################################
+# Traitement préliminaire des options requises à la compilation        #
+########################################################################
+
+ifeq ($(COMMON),false) # Si l’édition savante est explicitement requise à la compilation OU que l’édition commune n’est pas spécifiée.
+  SCHOLARLY=true
+endif
+ifndef COMMON
+  ifneq ($(SCHOLARLY),false)
+    SCHOLARLY=true
+  endif
+endif
+
+ifeq ($(DOUBLEEDITION),true) # Le bloc suivant n’est actif que pour les projets dévelopant une biédition.
+  TEXARGS      += \\\\def\\\\isscholarly{1} # Par défaut, l’édition savante est traitée.
+
+  ifeq ($(SCHOLARLY),true) # Si l’édition savante est explicitement requise à la compilation OU que l’édition commune n’est pas spécifiée.
+    TEXARGS += \\\\def\\\\isscholarly{1} # Variable LaTeX qui sera incluse dans les sources LaTeX pour signifier que la version savante est requise.
+    TEXARGS += \\\\let\\\\iscommon\\\\undefined # Désactive dans le code LaTeX toute mention à la version commune.
+    SUFFIX  :=${SUFFIX}-Ed.-sav# Déffinit le suffixe du fichier de sortie à `Ed.-sav` pour l’édition savante.
+    MAINFILE = main-scholarly.tex # Définit le fichier principal de projet LaTeX contenant le préambule et les déffintions minimale pour l’édition savante.
+  else
+    TEXARGS += \\\\def\\\\iscommon{1}# Indique a LaTeX que l’édition comune est considére.
+    TEXARGS += \\\\let\\\\isscholarly\\\\undefined# Corolaire : indique à LaTeX de ne pas tenir compte des spécificités de l’édition commune.
+    SUFFIX  :=${SUFFIX}-Ed.-com# Suffixe du nom de fichier de sortie pour l’édition commune.
+    MAINFILE = main-common.tex# Définit le fichier principal de projet LaTeX à appeler lors de l’éxecution de la ligne de commande.
+  endif
+
+else
+  MAINFILE = main.tex# Dans le cas où le projet n’éxige pas de double-édition, un fichier principal unique est déffinit pour tous les cas.
+endif
+
+########################################################################
+
+ifeq ($(OFFENSIVE),false)
+  NOOFFENSIVE=true
+endif
+ifndef OFFENSIVE
+  ifneq ($(NOOFFENSIVE),false)
+    NOOFFENSIVE=true
+  endif
+endif
+
+ifeq ($(NOOFFENSIVE),true) # Si l’option de bienséance est requise, une variable injectée dans LaTeX l’indique.
+  TEXARGS += \\\\let\\\\isoffensive\\\\undefined
+endif
+
+ifeq ($(OFFENSIVE),true) # Si l’option d’agressivité est *explicitement* requise à la compilation, une variable est injectée dans le code LaTeX et un suffixe est ajouté au fichier de sortie.
+  TEXARGS += \\\\def\\\\isoffensive{1}# Variable pour LaTeX.
+  SUFFIX  :=${SUFFIX}-agressif# Suffixe du fichier de sortie.
+endif
+
+########################################################################
+
+ifeq ($(PRINTABLE), true) # Si l’option d’impression est *explicitement* requise, alors une variable est injectée dans le code LaTeX et un suffix est ajouté au fichier de sortie.
+  TEXARGS += \\\\def\\\\isprintable{1}
+  SUFFIX  :=${SUFFIX}-imprim
+endif
+
+########################################################################
+
+ifeq ($(MONOCHROME),false)
+  COLOR=true
+endif
+ifndef MONOCHROME
+  ifneq ($(COLOR),false)
+    COLOR=true
+  endif
+endif
+
+ifeq ($(COLOR), true) # Si l’option colore est requise, une variable l’indiquant est injectée au code LaTeX.
+  TEXARGS += \\\\let\\\\ismonochrome\\\\undefined
+endif
+
+ifeq ($(MONOCHROME), true) # Si, au contraire, l’option monochrome est requise, une variable est injectée au code LaTeX et un suffix est ajouté au fichier de sortie.
+  TEXARGS += \\\\def\\\\ismonochrome{1}
+  SUFFIX  :=${SUFFIX}-NB
+endif
+
+########################################################################
+# Déffinition des principales variables                                #
+########################################################################
+
+TEX             = xelatex # Compilateur.
+PDF             = mimeopen # Logiciel de lecture des fichiers de sortie. La commande `mimeopen` choisi normalement le lecteur par défaut déffinit pour un type de format de fichier donné.
+PROCNAME        = ${NAME}${SUFFIX}# Variable formant le nom final du fichier de sortie avec les suffixes nécéssaires, selon les options de compilation demandées.
+
+ifdef TEXARGS # Si des variables suplémentaires sont à injecter, alors nous les injectons.
+  COMPIL        = ${TEX} -jobname=${PROCNAME}  "${TEXARGS} \\input{${MAINFILE}}"
+else # Sinon, nous ne nous les injectons pas et compilons simplement par l’appel au fichier principal.
+  COMPIL        = ${TEX} -jobname=${PROCNAME}  "\\input{${MAINFILE}}"
+endif
+
+FULLCOMPIL      = ${COMPIL} ; ${COMPIL} # Double compilation.
+PRODUCED        = ^${NAME}((-Ed.-(sav|com)|)(-agressif|)(-imprim|)(-NB|)\\.pdf|\\.tar\\.gz)$$# Variable contenant les noms des différentes possibilités de noms de fichiers de sorties.
+BIB             = bibtex # Déffinition du gestionnaire de bibliographie.
+MAKEGLOS        = makeglossaries # déffinition du gestionnaire de dictionnaire.
+MAKEGITHISTORIC = git log --format="%ad & %s \\\\\\\\ " --date=short # Commande de création d’un tableau latex de l’historique de révision d’après l’arbre de Git.
+SVGTXTSOURCES   = file\\.svg # Liste des images SVG contenant du texte à inclure et dont la conversion en pdf doit placer le texte dans un fichier différent afin qu’il soit géré par LaTeX. [Les fichiers placés ici sont protégés de la supression]
+MAKETEXTIMAGE   = for f in ${SVGSOURCES} ; do inkscape --export-latex --export-pdf=$$f.pdf $$f; done # Conversion en pdf tout en permetant à LaTeX de gérer les textes.
+SVGSOURCES      = file\\.svg # Liste des images SVG ne contenant pas de texte à convertir en SVG. [Les fichiers placés ici sont protégés de la supression]
+MAKEIMAGE       = for f in ${SVGSOURCES} ; do inkscape --export-png=$$f.pdf $$f; done # Conversion des images SVG en PNG simple.
+
+PRINT           = lpr # Commande d’impression.
+
+# Liste des fichiers à archiver.
+PROTECTED       = ^\\.git$$
+
+########################################################################
+# Traitement des principaux arguments                                  #
+########################################################################
+
+all:
+	make compile
+
+compile:
+	${COMPIL} ;
+	""" + glossaryMakefileComment + """$(MAKEGLOS) ${PROCNAME}.glo ; # Traitmeent du glossaire [À décomenter si besoin de glossaire].
+ifeq ($(SCHOLARLY),true) # Le bloc suivant n’est actif que pour les projets dévelopant une biédition.
+	""" + bibliographyMakefileComment + """$(BIB)      ${PROCNAME} ; # Traitement de la bibliographie [À décomenter si besoin de bibliographie].
+	""" + bibliographyMakefileComment + """${FULLCOMPIL}
+endif
+
+simplecomplie:
+	${COMPIL}
+
+historic:
+	echo "% vim: syntax=tex" > githistoric.tex ; # Placement d’une indication pour vim afin de gérer correctement la coloration syntaxique.
+	${MAKEGITHISTORIC} >> githistoric.tex # Mise à jour de l’historique de révision par écrasement de la précédente version.
+
+graphics:
+	${MAKEIMAGE}     ; # Conversion des images simples
+	${MAKETEXTIMAGE} # Conversion des images à texte.
+
+view: ${PROCNAME}.pdf
+	$(PDF) ${PROCNAME}.pdf & # Visionage du fichier de sortie à l’aide du lecteur déffinit par défaut par le système.
+
+print: ${PROCNAME}.pdf
+ifdef PRINTABLE
+	${PRINT} ${PROCNAME}.pdf # Si l’impression d’un document est demandée avec l’option d’impression activée, alors imprimer immédiatement.
+else # Sinon, avertir de la perte de donnée occasionée par les formats non-adaptés à l’impression.
+	echo "AVIS : Vous tentez d’imprimer une version non adaptée à cet effet."; echo "Par exemple, les liens sont cliquables et n’aparraissent pas au tirrage, ce qui constitue une perte d’information." ; ANSWERISCORRECT="no" ; read -p "Souhaitez vous continuer, tout de même ? [(N)on|(o)ui] " WHATUSERWANTTODO ; while [[ $$ANSWERISCORRECT == "no" ]] ; do if [[ $$WHATUSERWANTTODO == "o" ]]; then ${PRINT} ${PROCNAME}.pdf ; ANSWERISCORRECT="yes" ; elif [[ $$WHATUSERWANTTODO == "n" ]]; then echo "Fin de la production. Il n’y a rien à faire." ; ANSWERISCORRECT="yes" ; else read -p "La réponse « $$WHATUSERWANTTODO » est inconue. Veuillez saisir une réponse valide [(N)on|(o)ui] " WHATUSERWANTTODO ; fi ; done
+endif
+
+########################################################################
+# Traitement des arguments de nétoyage                                 #
+########################################################################
+
+archive:
+	tar --gzip --create --verbose --file ${NAME}.tar.gz `ls | grep --line-regexp --file=archivedfiles | tr '\\n' ' '` # N’archiver que les fichiers déffinits dans la variable `$ARCHIVED`.
+
+clean:
+	for f in `ls | grep --extended-regexp  "(^${NAME}(-Ed\\.-(sav|com)|)((-agressif|)(-imprim|)(-NB|))(\\.(aux|bbl|blg|glg|glo|gls|ist|log|out|run\\.xml)|-blx\\.bib)|*\\.tex\\.project\\.vim)"` ; do echo Suppression de $$f ; rm $$f ; done ;#
+	for f in `ls | grep --extended-regexp  ".*(\\~|\\.orig)"` ; do echo Suppression de $$f ; rm $$f ; done ;#
+
+mrproper:
+	make clean;#
+	for f in `ls | grep --extended-regexp  "^${NAME}(-Ed.-(sav|com)|)((-agressif|)(-imprim|)(-NB|))\\.pdf"` ; do echo Suppression de $$f ; rm $$f ; done
+"""
+
+print("Écriture de " + directory + "/Makefile")
+with open(directory + "/Makefile",'w') as f:
+    f.write(makefileTXT)
+
+#repo = git.Repo( directory )
+#print repo.git.status()
+#print repo.git.add(directory + "/fauve.sty")
+#print repo.git.add(directory + "/biblio.bib")
+#print repo.git.add(directory + "/platon.bib")
+#print repo.git.add(directory + "/main-glos.tex")
+#print repo.git.add(directory + "/macros.tex")
+#print repo.git.add(directory + "/contenu.tex")
+#
+#print repo.git.commit( m='First commit.' )
+#print repo.git.status()
+
+repo_dir = os.path.join(directory)
+#file_name = os.path.join(repo_dir, 'new-file')
+
+r = git.Repo.init(repo_dir)
+# This function just creates an empty file ...
+#open(file_name, 'wb').close()
+r.index.add([directory + "/fauve.sty",directory + "/biblio.bib",directory + "/platon.bib",directory + "/main-glos.tex",directory + "/macros.tex",directory + "/contenu.tex",directory + "/meta.tex",directory + "/Makefile"])
+if editionType == True:
+    r.index.add(directory + "/main.tex")
+elif editionType == False:
+    r.index.add([directory + "/main-scholarly.tex",directory + "/main-common.tex"])
+
+r.index.commit("initial commit")
